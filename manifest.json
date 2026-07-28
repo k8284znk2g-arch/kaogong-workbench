@@ -1,7 +1,7 @@
 {
-  "name": "考公工作台",
-  "short_name": "考公工作台",
-  "description": "备考总规划、每日任务、专项刷题、全真模考一站式工作台",
+  "name": "备考工作台",
+  "short_name": "备考工作台",
+  "description": "行测/职测/综应/银行知识/专八备考总规划、每日任务、专项刷题、全真模考一站式工作台",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#f5f7fa",
