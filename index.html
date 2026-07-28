@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="考公工作台">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <title>考公工作台</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#4f46e5',
+            primaryLight: '#6366f1',
+            bg: '#f5f7fa'
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    * { -webkit-tap-highlight-color: transparent; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; overscroll-behavior-y: none; }
+    .page { display: none; animation: fadeIn .25s ease; }
+    .page.active { display: block; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    .card { background: white; border-radius: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.04); }
+    .btn-primary { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: white; }
+    .progress-bar { height: 8px; border-radius: 999px; background: #e5e7eb; overflow: hidden; }
+    .progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, #4f46e5, #7c3aed); }
+    .checkbox { width: 22px; height: 22px; border: 2px solid #d1d5db; border-radius: 6px; display: flex; align-items: center; justify-content: center; transition: all .2s; }
+    .checkbox.checked { background: #22c55e; border-color: #22c55e; }
+    .ring-chart { position: relative; width: 64px; height: 64px; }
+    .ring-chart svg { transform: rotate(-90deg); }
+    .ring-chart .center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 14px; color: #111827; }
+    .drawer { transition: transform .25s ease; }
+    .drawer.open { transform: translateX(0); }
+    .drawer.closed { transform: translateX(-100%); }
+    .overlay { transition: opacity .25s ease; }
+    .overlay.show { opacity: 1; pointer-events: auto; }
+    .overlay.hide { opacity: 0; pointer-events: none; }
+    .nav-item.active { background: rgba(79,70,229,0.1); color: #4f46e5; }
+    .stage-line { position: absolute; left: 50%; top: 0; bottom: 0; width: 2px; background: #e5e7eb; transform: translateX(-50%); }
+    .stage-dot { width: 36px; height: 36px; border-radius: 50%; background: #e5e7eb; color: #6b7280; display: flex; align-items: center; justify-content: center; font-weight: 700; position: relative; z-index: 1; }
+    .stage-dot.active { background: #4f46e5; color: white; }
+    /* safe area for notched phones */
+    .safe-top { padding-top: env(safe-area-inset-top); }
+    .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+  </style>
+</head>
+<body class="bg-bg text-gray-800 min-h-screen">
+  <!-- 顶部导航 -->
+  <header class="sticky top-0 z-30 bg-bg safe-top">
+    <div class="flex items-center justify-between px-4 py-3">
+      <button id="menuBtn" class="p-2 -ml-2 rounded-lg hover:bg-gray-200 transition">
+        <svg class="w-6 h-6 text-gray-700" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+      <div class="flex-1 ml-3">
+        <h1 id="pageTitle" class="text-lg font-bold text-gray-900">备考总规划看板</h1>
+        <p id="pageBreadcrumb" class="text-xs text-gray-500">首页 / 备考总规划看板</p>
+      </div>
+      <div class="flex items-center gap-2">
+        <div class="hidden sm:block text-xs text-gray-500 bg-white px-3 py-1.5 rounded-full shadow-sm" id="headerDate">2026年7月27日 星期一</div>
+        <div class="btn-primary px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm">距国考 <span id="countdown">92</span> 天</div>
+        <button onclick="app.openExamDate()" class="btn-primary px-3 py-1.5 rounded-full text-xs font-semibold shadow-sm">设置考试</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 侧边栏 -->
+  <div id="overlay" class="overlay fixed inset-0 bg-black/40 z-40 hide" onclick="app.toggleDrawer(false)"></div>
+  <aside id="drawer" class="drawer closed fixed top-0 left-0 h-full w-64 bg-slate-900 text-white z-50 shadow-2xl flex flex-col">
+    <div class="p-4 border-b border-slate-700 flex items-center justify-between safe-top">
+      <div class="flex items-center gap-3">
+        <div class="w-9 h-9 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-lg">📚</div>
+        <span class="font-bold text-lg">任务栏导航</span>
+      </div>
+      <button onclick="app.toggleDrawer(false)" class="p-1 rounded hover:bg-slate-700">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </div>
+    <nav class="flex-1 p-3 space-y-2 overflow-y-auto">
+      <a href="#" data-page="dashboard" class="nav-item active flex items-center gap-3 px-3 py-3 rounded-xl transition" onclick="app.nav('dashboard')">
+        <span>📊</span><span>备考总规划看板</span>
+      </a>
+      <a href="#" data-page="daily" class="nav-item flex items-center gap-3 px-3 py-3 rounded-xl transition" onclick="app.nav('daily')">
+        <span>✅</span><span>每日任务中心</span><span id="navBadge" class="ml-auto bg-red-500 text-white text-xs px-2 py-0.5 rounded-full hidden">0</span>
+      </a>
+      <a href="#" data-page="bank" class="nav-item flex items-center gap-3 px-3 py-3 rounded-xl transition" onclick="app.nav('bank')">
+        <span>📝</span><span>专项刷题题库</span>
+      </a>
+      <a href="#" data-page="mock" class="nav-item flex items-center gap-3 px-3 py-3 rounded-xl transition" onclick="app.nav('mock')">
+        <span>🎓</span><span>全真模考专区</span>
+      </a>
+      <a href="#" data-page="essay" class="nav-item flex items-center gap-3 px-3 py-3 rounded-xl transition" onclick="app.nav('essay')">
+        <span>📖</span><span>申论专项管理</span>
+      </a>
+      <a href="#" data-page="data" class="nav-item flex items-center gap-3 px-3 py-3 rounded-xl transition" onclick="app.nav('data')">
+        <span>📈</span><span>学情数据复盘</span>
+      </a>
+      <a href="#" data-page="toolbox" class="nav-item flex items-center gap-3 px-3 py-3 rounded-xl transition" onclick="app.nav('toolbox')">
+        <span>🧰</span><span>备考工具箱</span>
+      </a>
+    </nav>
+    <div class="p-4 border-t border-slate-700 text-xs text-slate-400 safe-bottom">
+      <div class="flex items-center gap-2"><span>📅</span><span>距国考 <span id="drawerCountdown">92</span> 天</span></div>
+    </div>
+  </aside>
+
+  <!-- 主内容 -->
+  <main class="px-4 pb-24 safe-bottom">
+    <!-- 看板 -->
+    <section id="dashboard" class="page active">
+      <div class="grid grid-cols-1 gap-3 mb-4">
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl">📋</div>
+          <div><div class="text-3xl font-bold text-gray-900" id="dashTotal">0</div><div class="text-sm text-gray-500">今日总任务</div></div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-2xl">✅</div>
+          <div><div class="text-3xl font-bold text-gray-900" id="dashDone">0</div><div class="text-sm text-gray-500">已完成</div></div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl">⏳</div>
+          <div><div class="text-3xl font-bold text-gray-900" id="dashTodo">0</div><div class="text-sm text-gray-500">待完成</div></div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center text-2xl">🎯</div>
+          <div><div class="text-3xl font-bold text-gray-900" id="dashRate">0%</div><div class="text-sm text-gray-500">完成率</div></div>
+        </div>
+      </div>
+
+      <div class="card p-4 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <div>
+            <h3 class="font-bold text-gray-900">今日必做</h3>
+            <p class="text-xs text-gray-500 mt-0.5">勾选完成任务，实时更新进度</p>
+          </div>
+          <button onclick="app.nav('daily')" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium shadow-sm">去每日任务 →</button>
+        </div>
+        <div id="dashTasks" class="space-y-2"></div>
+        <div class="flex gap-2 mt-3">
+          <input id="dashInput" type="text" placeholder="添加今日任务，按回车确认" class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" onkeydown="if(event.key==='Enter')app.addTask()">
+          <button onclick="app.addTask()" class="btn-primary px-5 rounded-xl text-sm font-medium shadow-sm">添加</button>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="font-bold text-gray-900 mb-1">阶段路线</h3>
+        <p class="text-xs text-gray-500 mb-4">当前：<span id="currentStageName" class="text-primary font-medium">强化阶段</span></p>
+        <div class="relative pl-4">
+          <div class="stage-line"></div>
+          <div class="space-y-6">
+            <div class="stage-item flex gap-4 items-start">
+              <div class="stage-dot active" data-stage="1">1</div>
+              <div class="flex-1 pb-2">
+                <div class="font-bold text-gray-900">基础阶段</div>
+                <div class="text-xs text-gray-500 mt-0.5">2025-06 ~ 2025-08</div>
+              </div>
+            </div>
+            <div class="stage-item flex gap-4 items-start">
+              <div class="stage-dot" data-stage="2">2</div>
+              <div class="flex-1 pb-2">
+                <div class="font-bold text-gray-900">强化阶段</div>
+                <div class="text-xs text-gray-500 mt-0.5">2025-09 ~ 2025-10</div>
+              </div>
+            </div>
+            <div class="stage-item flex gap-4 items-start">
+              <div class="stage-dot" data-stage="3">3</div>
+              <div class="flex-1 pb-2">
+                <div class="font-bold text-gray-900">冲刺阶段</div>
+                <div class="text-xs text-gray-500 mt-0.5">2025-11 ~ 考前</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 每日任务 -->
+    <section id="daily" class="page">
+      <div class="grid grid-cols-1 gap-3 mb-4">
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-2xl">📋</div>
+          <div><div class="text-3xl font-bold text-gray-900" id="dailyTotal">0</div><div class="text-sm text-gray-500">今日任务</div></div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-green-50 flex items-center justify-center text-2xl">✅</div>
+          <div><div class="text-3xl font-bold text-gray-900" id="dailyDone">0</div><div class="text-sm text-gray-500">已完成</div></div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-amber-50 flex items-center justify-center text-2xl">⏳</div>
+          <div><div class="text-3xl font-bold text-gray-900" id="dailyTodo">0</div><div class="text-sm text-gray-500">待完成</div></div>
+        </div>
+        <div class="card p-4 flex items-center gap-4">
+          <div class="w-12 h-12 rounded-xl bg-rose-50 flex items-center justify-center text-2xl">🎯</div>
+          <div><div class="text-3xl font-bold text-gray-900" id="dailyRate">0%</div><div class="text-sm text-gray-500">完成率</div></div>
+        </div>
+      </div>
+
+      <div class="card p-4 mb-4">
+        <div class="flex items-center justify-between mb-4">
+          <div>
+            <h3 class="font-bold text-gray-900">今日任务清单</h3>
+            <p class="text-xs text-gray-500 mt-0.5" id="dailyDate">2026年7月27日 星期一</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-500">完成率</span>
+            <div class="ring-chart">
+              <svg width="64" height="64" viewBox="0 0 64 64">
+                <circle cx="32" cy="32" r="28" fill="none" stroke="#e5e7eb" stroke-width="6"/>
+                <circle id="dailyRing" cx="32" cy="32" r="28" fill="none" stroke="url(#ringGrad)" stroke-width="6" stroke-dasharray="0 176" stroke-linecap="round"/>
+                <defs><linearGradient id="ringGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#4f46e5"/><stop offset="100%" stop-color="#7c3aed"/></linearGradient></defs>
+              </svg>
+              <div class="center" id="dailyRingText">0%</div>
+            </div>
+          </div>
+        </div>
+        <div id="dailyTasks" class="space-y-2"></div>
+        <div class="flex gap-2 mt-3">
+          <input id="dailyInput" type="text" placeholder="添加新任务，按回车添加" class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" onkeydown="if(event.key==='Enter')app.addTask('daily')">
+          <select id="dailyCategory" class="bg-gray-50 border border-gray-200 rounded-xl px-2 text-sm focus:outline-none focus:border-primary">
+            <option value="行测">行测</option>
+            <option value="申论">申论</option>
+            <option value="时政">时政</option>
+            <option value="复盘">复盘</option>
+          </select>
+          <button onclick="app.addTask('daily')" class="btn-primary px-5 rounded-xl text-sm font-medium shadow-sm">添加</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- 专项刷题 -->
+    <section id="bank" class="page">
+      <div class="card p-4 mb-4">
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="font-bold text-gray-900">专项刷题题库</h3>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">按模块分类，逐步攻克薄弱环节</p>
+        <div id="bankList" class="space-y-4"></div>
+      </div>
+    </section>
+
+    <!-- 全真模考 -->
+    <section id="mock" class="page">
+      <div class="card p-4 mb-4">
+        <div class="flex items-center justify-between mb-1">
+          <h3 class="font-bold text-gray-900">全真模考专区</h3>
+          <button onclick="app.addMock()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium shadow-sm">+ 开始模考</button>
+        </div>
+        <p class="text-xs text-gray-500 mb-4">模拟真实考场环境，检验备考成果</p>
+        <div id="mockList" class="space-y-3"></div>
+      </div>
+      <div class="card p-4">
+        <h3 class="font-bold text-gray-900 mb-4">模考成绩趋势</h3>
+        <div id="mockChart" class="flex items-end justify-around h-40 gap-2"></div>
+      </div>
+    </section>
+
+    <!-- 申论专项 -->
+    <section id="essay" class="page">
+      <div class="card p-4 mb-4">
+        <div class="flex items-center justify-between mb-1">
+          <div>
+            <h3 class="font-bold text-gray-900">申论专项管理</h3>
+            <p class="text-xs text-gray-500 mt-0.5">归纳概括 · 综合分析 · 公文写作 · 大作文</p>
+          </div>
+          <button onclick="app.addEssay()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium shadow-sm">+ 新建练习</button>
+        </div>
+        <div class="mt-4 overflow-x-auto">
+          <div class="grid grid-cols-4 text-xs text-gray-400 mb-2 px-2">
+            <div>题目</div><div>日期</div><div>状态</div><div class="text-right">操作</div>
+          </div>
+          <div id="essayList" class="space-y-2"></div>
+        </div>
+      </div>
+
+      <div class="card p-4 mb-4">
+        <h3 class="font-bold text-gray-900 mb-3">申论素材积累</h3>
+        <div id="essayMaterialList" class="space-y-2 mb-3"></div>
+        <div class="flex gap-2">
+          <input id="essayMaterialInput" type="text" placeholder="添加素材或练习任务" class="flex-1 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-primary" onkeydown="if(event.key==='Enter')app.addEssayMaterial()">
+          <button onclick="app.addEssayMaterial()" class="btn-primary px-5 rounded-xl text-sm font-medium shadow-sm">添加</button>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="font-bold text-gray-900 mb-3">写作技巧提示</h3>
+        <div id="essayTips" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- 学情数据 -->
+    <section id="data" class="page">
+      <div class="card p-4 mb-4">
+        <h3 class="font-bold text-gray-900 mb-4">近7日任务完成量</h3>
+        <div id="weeklyChart" class="flex items-end justify-around h-44 gap-2 mb-3"></div>
+        <div class="flex justify-center items-center gap-4 text-xs">
+          <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm bg-gray-200"></span><span class="text-gray-500">总任务</span></div>
+          <div class="flex items-center gap-1"><span class="w-3 h-3 rounded-sm btn-primary"></span><span class="text-gray-500">已完成</span></div>
+        </div>
+      </div>
+
+      <div class="card p-4 mb-4">
+        <h3 class="font-bold text-gray-900 mb-4">任务标签分布</h3>
+        <div id="tagDistribution" class="space-y-4"></div>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="font-bold text-gray-900 mb-4">模考成绩记录</h3>
+        <div class="overflow-x-auto">
+          <div class="grid grid-cols-5 text-xs text-gray-400 mb-2 px-2 min-w-[420px]">
+            <div>模考名称</div><div>日期</div><div>得分</div><div>满分</div><div>得分率</div>
+          </div>
+          <div id="mockRecordList" class="space-y-2 min-w-[420px]"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 备考工具箱 -->
+    <section id="toolbox" class="page">
+      <div class="card p-4 mb-4">
+        <h3 class="font-bold text-gray-900 mb-1">备考工具箱</h3>
+        <p class="text-xs text-gray-500 mb-4">常用工具一键直达</p>
+        <div class="grid grid-cols-3 gap-3">
+          <button onclick="app.startTomato()" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">⏱️</div>
+            <div class="font-bold text-xs">番茄钟</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">25分钟专注</div>
+          </button>
+          <button onclick="alert('学习计划：建议按阶段路线制定周/月计划，可结合每日任务拆解。')" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">📅</div>
+            <div class="font-bold text-xs">学习计划</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">制定周/月计划</div>
+          </button>
+          <button onclick="app.nav('bank')" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">📓</div>
+            <div class="font-bold text-xs">错题本</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">记录与复习</div>
+          </button>
+          <button onclick="alert('速算练习：建议每天做 20 分钟资料分析速算，提升计算速度。')" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">🧮</div>
+            <div class="font-bold text-xs">速算练习</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">资料分析速算</div>
+          </button>
+          <button onclick="alert('时政热点：建议每天阅读 15 分钟时政，积累申论素材。')" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">📰</div>
+            <div class="font-bold text-xs">时政热点</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">每日时政摘要</div>
+          </button>
+          <button onclick="app.nav('data')" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">🎯</div>
+            <div class="font-bold text-xs">目标管理</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">设定与追踪</div>
+          </button>
+          <button onclick="app.nav('data')" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">📊</div>
+            <div class="font-bold text-xs">成绩分析</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">多维度统计</div>
+          </button>
+          <button onclick="app.exportData()" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">💾</div>
+            <div class="font-bold text-xs">数据导出</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">导出学习记录</div>
+          </button>
+          <button onclick="app.openExamDate()" class="p-3 rounded-xl bg-gray-50 hover:bg-gray-100 text-center">
+            <div class="text-2xl mb-1">⚙️</div>
+            <div class="font-bold text-xs">设置</div>
+            <div class="text-[10px] text-gray-500 mt-0.5">偏好与考试</div>
+          </button>
+        </div>
+      </div>
+
+      <div class="card p-4">
+        <h3 class="font-bold text-gray-900 mb-3">快捷操作</h3>
+        <div class="flex flex-wrap gap-2">
+          <button onclick="app.nav('daily')" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium shadow-sm">去每日任务</button>
+          <button onclick="app.nav('bank')" class="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 bg-white text-gray-700">去刷题</button>
+          <button onclick="app.nav('mock')" class="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 bg-white text-gray-700">去模考</button>
+          <button onclick="app.nav('essay')" class="px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 bg-white text-gray-700">去申论</button>
+          <button onclick="if(confirm('确定清空所有本地数据？')){localStorage.clear();location.reload()}" class="px-4 py-2 rounded-xl text-sm font-medium bg-red-50 text-red-500 border border-red-100">重置数据</button>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- 考试日期弹窗 -->
+  <div id="examModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/40">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-2xl">
+      <h3 class="font-bold text-lg mb-3">设置考试日期</h3>
+      <input id="examDateInput" type="date" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mb-4 focus:outline-none focus:border-primary">
+      <div class="flex justify-end gap-2">
+        <button onclick="app.closeExamDate()" class="px-4 py-2 rounded-xl text-sm text-gray-600 hover:bg-gray-100">取消</button>
+        <button onclick="app.saveExamDate()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 导入弹窗 -->
+  <div id="importModal" class="fixed inset-0 z-50 hidden items-center justify-center p-4 bg-black/40">
+    <div class="bg-white rounded-2xl p-5 w-full max-w-sm shadow-2xl">
+      <h3 class="font-bold text-lg mb-3">导入数据</h3>
+      <textarea id="importText" rows="5" placeholder="粘贴 JSON 数据" class="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm mb-4 focus:outline-none focus:border-primary"></textarea>
+      <div class="flex justify-end gap-2">
+        <button onclick="app.closeImport()" class="px-4 py-2 rounded-xl text-sm text-gray-600 hover:bg-gray-100">取消</button>
+        <button onclick="app.doImport()" class="btn-primary px-4 py-2 rounded-xl text-sm font-medium">导入</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const app = {
+      data: {
+        examDate: '2026-11-29',
+        tasks: [
+          { id: 1, title: '行测言语理解 30 题', category: '行测', done: true },
+          { id: 2, title: '申论大作文提纲 1 篇', category: '申论', done: true },
+          { id: 3, title: '资料分析速算练习 20 分钟', category: '行测', done: false },
+          { id: 4, title: '时政热点阅读 15 分钟', category: '时政', done: false },
+          { id: 5, title: '错题本复盘 10 题', category: '复盘', done: false }
+        ],
+        bank: [
+          { name: '言语理解与表达', total: 120, done: 45 },
+          { name: '数量关系', total: 80, done: 22 },
+          { name: '判断推理', total: 100, done: 60 },
+          { name: '资料分析', total: 90, done: 38 },
+          { name: '常识判断', total: 150, done: 70 },
+          { name: '申论小题', total: 60, done: 20 }
+        ],
+        mocks: [
+          { title: '2025 国考行测模考一', date: '2025-09-15', score: 68 },
+          { title: '2025 国考申论模考一', date: '2025-09-20', score: 72 },
+          { title: '2025 省考行测模考一', date: '2025-10-05', score: 75 }
+        ],
+        essays: [
+          { id: 101, title: '数字经济与高质量发展', date: '2025-10-01', status: '已完成', content: '数字经济是推动高质量发展的关键引擎……' },
+          { id: 102, title: '基层治理创新路径', date: '2025-10-08', status: '撰写中', content: '基层治理需要多方协同……' }
+        ],
+        essayMaterials: [
+          { id: 201, title: '申论大作文提纲 1 篇', done: true }
+        ],
+        tips: [
+          { title: '开头要亮', content: '申论大作文开头建议用“背景+问题+观点”三段式，控制在120字以内。' },
+          { title: '论据要实', content: '多用数据、政策文件、典型案例支撑论点，避免空泛口号。' },
+          { title: '结构要清', content: '建议采用“总-分-总”结构，每段首句明确分论点，便于阅卷人抓取。' }
+        ],
+        dailyStats: []
+      },
+      init() {
+        this.load();
+        this.updateDates();
+        this.renderAll();
+        document.getElementById('menuBtn').onclick = () => this.toggleDrawer(true);
+        window.addEventListener('hashchange', () => this.navFromHash());
+        this.navFromHash();
+      },
+      load() {
+        try {
+          const raw = localStorage.getItem('kaogong');
+          if (raw) Object.assign(this.data, JSON.parse(raw));
+        } catch (e) {}
+      },
+      save() {
+        localStorage.setItem('kaogong', JSON.stringify(this.data));
+      },
+      updateDates() {
+        const now = new Date();
+        const weekdays = ['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+        const dateStr = `${now.getFullYear()}年${now.getMonth()+1}月${now.getDate()}日 ${weekdays[now.getDay()]}`;
+        document.getElementById('headerDate').textContent = dateStr;
+        document.getElementById('dailyDate').textContent = dateStr;
+        const exam = new Date(this.data.examDate);
+        const diff = Math.ceil((exam - new Date(now.getFullYear(), now.getMonth(), now.getDate())) / 86400000);
+        const days = diff > 0 ? diff : 0;
+        document.getElementById('countdown').textContent = days;
+        document.getElementById('drawerCountdown').textContent = days;
+      },
+      nav(page) {
+        location.hash = page;
+        this.toggleDrawer(false);
+      },
+      navFromHash() {
+        const page = location.hash.replace('#', '') || 'dashboard';
+        const titles = {
+          dashboard: ['备考总规划看板','首页 / 备考总规划看板'],
+          daily: ['每日任务中心','首页 / 每日任务中心'],
+          bank: ['专项刷题题库','首页 / 专项刷题题库'],
+          mock: ['全真模考专区','首页 / 全真模考专区'],
+          essay: ['申论专项管理','首页 / 申论专项管理'],
+          data: ['学情数据复盘','首页 / 学情数据复盘'],
+          toolbox: ['备考工具箱','首页 / 备考工具箱']
+        };
+        const t = titles[page] || titles.dashboard;
+        document.getElementById('pageTitle').textContent = t[0];
+        document.getElementById('pageBreadcrumb').textContent = t[1];
+        document.querySelectorAll('.page').forEach(el => el.classList.remove('active'));
+        const target = document.getElementById(page);
+        if (target) target.classList.add('active');
+        document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+        const nav = document.querySelector(`.nav-item[data-page="${page}"]`);
+        if (nav) nav.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      },
+      toggleDrawer(show) {
+        const drawer = document.getElementById('drawer');
+        const overlay = document.getElementById('overlay');
+        if (show) { drawer.classList.replace('closed','open'); overlay.classList.replace('hide','show'); }
+        else { drawer.classList.replace('open','closed'); overlay.classList.replace('show','hide'); }
+      },
+      stats() {
+        const total = this.data.tasks.length;
+        const done = this.data.tasks.filter(t => t.done).length;
+        const todo = total - done;
+        const rate = total ? Math.round(done / total * 100) : 0;
+        return { total, done, todo, rate };
+      },
+      renderAll() {
+        const { total, done, todo, rate } = this.stats();
+        ['dash','daily'].forEach(p => {
+          document.getElementById(p + 'Total').textContent = total;
+          document.getElementById(p + 'Done').textContent = done;
+          document.getElementById(p + 'Todo').textContent = todo;
+          document.getElementById(p + 'Rate').textContent = rate + '%';
+        });
+        document.getElementById('dailyRingText').textContent = rate + '%';
+        const circle = document.getElementById('dailyRing');
+        const r = 28, c = 2 * Math.PI * r;
+        circle.setAttribute('stroke-dasharray', `${rate/100 * c} ${c}`);
+        const badge = document.getElementById('navBadge');
+        if (todo > 0) { badge.textContent = todo; badge.classList.remove('hidden'); }
+        else badge.classList.add('hidden');
+        this.renderTasks();
+        this.renderBank();
+        this.renderMock();
+        this.renderEssay();
+        this.renderData();
+        this.renderToolbox();
+        this.updateStage();
+      },
+      renderTasks() {
+        const html = this.data.tasks.map(t => this.taskHtml(t)).join('');
+        document.getElementById('dashTasks').innerHTML = html;
+        document.getElementById('dailyTasks').innerHTML = html;
+      },
+      taskHtml(t) {
+        return `
+          <div class="flex items-center gap-3 p-3 rounded-xl border ${t.done ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-100'} transition">
+            <div class="checkbox ${t.done ? 'checked' : ''}" onclick="app.toggleTask(${t.id})">
+              ${t.done ? '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12l5 5L20 7"/></svg>' : ''}
+            </div>
+            <div class="flex-1 ${t.done ? 'text-gray-400 line-through' : 'text-gray-800'}">
+              <div class="text-sm font-medium">${t.title}</div>
+            </div>
+            <span class="text-xs text-gray-400">${t.category}</span>
+            <button onclick="app.deleteTask(${t.id})" class="text-gray-300 hover:text-red-500 p-1">×</button>
+          </div>
+        `;
+      },
+      toggleTask(id) {
+        const t = this.data.tasks.find(x => x.id === id);
+        if (t) { t.done = !t.done; this.save(); this.renderAll(); }
+      },
+      deleteTask(id) {
+        this.data.tasks = this.data.tasks.filter(x => x.id !== id);
+        this.save();
+        this.renderAll();
+      },
+      addTask(source) {
+        const input = source === 'daily' ? document.getElementById('dailyInput') : document.getElementById('dashInput');
+        const cat = source === 'daily' ? document.getElementById('dailyCategory').value : '行测';
+        const title = input.value.trim();
+        if (!title) return;
+        this.data.tasks.push({ id: Date.now(), title, category: cat, done: false });
+        input.value = '';
+        this.save();
+        this.renderAll();
+      },
+      renderBank() {
+        const colors = ['bg-blue-100 text-blue-600','bg-amber-100 text-amber-600','bg-green-100 text-green-600','bg-indigo-100 text-indigo-600','bg-purple-100 text-purple-600','bg-pink-100 text-pink-600'];
+        document.getElementById('bankList').innerHTML = this.data.bank.map((b, i) => {
+          const pct = Math.round(b.done / b.total * 100);
+          return `
+            <div class="border border-gray-100 rounded-xl p-3">
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-bold text-gray-900">${b.name}</h4>
+                <span class="text-xs px-2 py-1 rounded-md ${colors[i % colors.length]}">${pct}%</span>
+              </div>
+              <div class="text-xs text-gray-500 mb-2">已完成 ${b.done} / ${b.total} 题</div>
+              <div class="progress-bar mb-3"><div class="progress-fill" style="width:${pct}%"></div></div>
+              <div class="flex gap-2">
+                <button onclick="app.doBank(${i})" class="flex-1 btn-primary py-2 rounded-xl text-sm font-medium shadow-sm">开始刷题</button>
+                <button onclick="app.showWrong(${i})" class="flex-1 bg-white border border-gray-200 text-gray-700 py-2 rounded-xl text-sm font-medium">错题本</button>
+              </div>
+            </div>
+          `;
+        }).join('');
+      },
+      doBank(idx) {
+        const b = this.data.bank[idx];
+        if (b.done < b.total) { b.done += 1; this.save(); this.renderBank(); }
+      },
+      showWrong(idx) {
+        alert(this.data.bank[idx].name + ' 错题本：建议将做错的题目整理到每日任务中复盘。');
+      },
+      renderMock() {
+        const max = Math.max(...this.data.mocks.map(m => m.score), 100);
+        document.getElementById('mockList').innerHTML = this.data.mocks.map((m, i) => {
+          const colorClass = m.score >= 75 ? 'bg-green-100 text-green-600' : m.score >= 70 ? 'bg-amber-100 text-amber-600' : 'bg-orange-100 text-orange-600';
+          return `
+            <div class="flex items-center gap-3 p-3 rounded-xl border border-gray-100">
+              <div class="w-12 h-12 rounded-full ${colorClass} flex items-center justify-center text-lg font-bold">${m.score}</div>
+              <div class="flex-1">
+                <div class="font-bold text-gray-900">${m.title}</div>
+                <div class="text-xs text-gray-500 mt-0.5">${m.date} · 满分 100</div>
+              </div>
+              <span class="text-xs px-2 py-1 rounded-md ${colorClass}">${m.score}%</span>
+            </div>
+          `;
+        }).join('');
+        document.getElementById('mockChart').innerHTML = this.data.mocks.map(m => {
+          const h = Math.round(m.score / max * 100);
+          return `
+            <div class="flex-1 flex flex-col items-center justify-end">
+              <div class="text-xs font-bold mb-1">${m.score}</div>
+              <div class="w-full max-w-[40px] rounded-t-lg btn-primary" style="height:${h}px"></div>
+              <div class="text-[10px] text-gray-400 mt-1">${m.date.slice(5)}</div>
+            </div>
+          `;
+        }).join('');
+      },
+      addMock() {
+        const titles = ['2026 国考行测模考二', '2026 国考申论模考二', '2026 省考行测模考二'];
+        const today = new Date().toISOString().slice(0, 10);
+        const title = titles[Math.floor(Math.random() * titles.length)];
+        const score = Math.floor(65 + Math.random() * 15);
+        this.data.mocks.push({ title, date: today, score });
+        this.save();
+        this.renderMock();
+      },
+      updateStage() {
+        const today = new Date();
+        const y = today.getFullYear(), m = today.getMonth() + 1;
+        let stage = 1;
+        if (y > 2025 || (y === 2025 && m >= 9)) stage = 2;
+        if (y > 2025 || (y === 2025 && m >= 11)) stage = 3;
+        document.querySelectorAll('.stage-dot').forEach(d => {
+          d.classList.toggle('active', parseInt(d.dataset.stage) === stage);
+        });
+        const names = {1:'基础阶段',2:'强化阶段',3:'冲刺阶段'};
+        document.getElementById('currentStageName').textContent = names[stage];
+      },
+      openExamDate() {
+        document.getElementById('examDateInput').value = this.data.examDate;
+        document.getElementById('examModal').classList.replace('hidden','flex');
+      },
+      closeExamDate() {
+        document.getElementById('examModal').classList.replace('flex','hidden');
+      },
+      saveExamDate() {
+        const v = document.getElementById('examDateInput').value;
+        if (v) { this.data.examDate = v; this.save(); this.updateDates(); this.closeExamDate(); }
+      },
+      exportData() {
+        const blob = new Blob([JSON.stringify(this.data, null, 2)], { type: 'application/json' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `kaogong-backup-${new Date().toISOString().slice(0,10)}.json`;
+        a.click();
+      },
+      importData() {
+        document.getElementById('importText').value = '';
+        document.getElementById('importModal').classList.replace('hidden','flex');
+      },
+      closeImport() {
+        document.getElementById('importModal').classList.replace('flex','hidden');
+      },
+      doImport() {
+        try {
+          const v = JSON.parse(document.getElementById('importText').value);
+          this.data = Object.assign(this.data, v);
+          this.save();
+          this.renderAll();
+          this.closeImport();
+          alert('导入成功');
+        } catch (e) { alert('JSON 格式错误'); }
+      },
+      renderEssay() {
+        document.getElementById('essayList').innerHTML = this.data.essays.map(e => {
+          const statusClass = e.status === '已完成' ? 'bg-green-100 text-green-600' : 'bg-blue-100 text-blue-600';
+          return `
+            <div class="grid grid-cols-4 items-center px-2 py-3 rounded-xl border border-gray-100 text-sm">
+              <div class="font-medium text-gray-900 truncate pr-2">${e.title}</div>
+              <div class="text-gray-500 text-xs">${e.date}</div>
+              <div><span class="text-xs px-2 py-1 rounded-md ${statusClass}">${e.status}</span></div>
+              <div class="flex justify-end gap-2">
+                <button onclick="app.viewEssay(${e.id})" class="px-3 py-1 rounded-lg border border-gray-200 text-xs text-gray-600 bg-white">查看</button>
+                <button onclick="app.deleteEssay(${e.id})" class="px-3 py-1 rounded-lg border border-red-100 text-xs text-red-500 bg-red-50">删除</button>
+              </div>
+            </div>
+          `;
+        }).join('') || '<div class="text-center text-gray-400 text-sm py-4">暂无练习，点击右上角新建</div>';
+        document.getElementById('essayMaterialList').innerHTML = this.data.essayMaterials.map(m => `
+          <div class="flex items-center gap-3 p-3 rounded-xl border ${m.done ? 'bg-gray-50 border-gray-100' : 'bg-white border-gray-100'}">
+            <div class="checkbox ${m.done ? 'checked' : ''}" onclick="app.toggleEssayMaterial(${m.id})">
+              ${m.done ? '<svg class="w-4 h-4 text-white" fill="none" stroke="currentColor" stroke-width="3" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12l5 5L20 7"/></svg>' : ''}
+            </div>
+            <div class="flex-1 text-sm ${m.done ? 'text-gray-400 line-through' : 'text-gray-800'}">${m.title}</div>
+            <button onclick="app.deleteEssayMaterial(${m.id})" class="text-gray-300 hover:text-red-500 p-1">×</button>
+          </div>
+        `).join('');
+        document.getElementById('essayTips').innerHTML = this.data.tips.map(t => `
+          <div class="p-3 rounded-xl border border-gray-100 bg-white">
+            <div class="flex items-start gap-3">
+              <div class="text-xl">💡</div>
+              <div>
+                <div class="font-bold text-sm text-gray-900">${t.title}</div>
+                <div class="text-xs text-gray-500 mt-1 leading-relaxed">${t.content}</div>
+              </div>
+            </div>
+          </div>
+        `).join('');
+      },
+      addEssay() {
+        const title = prompt('请输入申论练习题目：');
+        if (!title) return;
+        const today = new Date().toISOString().slice(0, 10);
+        this.data.essays.push({ id: Date.now(), title, date: today, status: '撰写中', content: '' });
+        this.save();
+        this.renderEssay();
+      },
+      deleteEssay(id) {
+        if (!confirm('确定删除该练习？')) return;
+        this.data.essays = this.data.essays.filter(e => e.id !== id);
+        this.save();
+        this.renderEssay();
+      },
+      viewEssay(id) {
+        const e = this.data.essays.find(x => x.id === id);
+        if (!e) return;
+        const content = prompt(`查看/编辑《${e.title}》内容：`, e.content);
+        if (content !== null) {
+          e.content = content;
+          if (content.trim().length > 20 && e.status === '撰写中') e.status = '已完成';
+          this.save();
+          this.renderEssay();
+        }
+      },
+      toggleEssayMaterial(id) {
+        const m = this.data.essayMaterials.find(x => x.id === id);
+        if (m) { m.done = !m.done; this.save(); this.renderEssay(); }
+      },
+      deleteEssayMaterial(id) {
+        this.data.essayMaterials = this.data.essayMaterials.filter(x => x.id !== id);
+        this.save();
+        this.renderEssay();
+      },
+      addEssayMaterial() {
+        const input = document.getElementById('essayMaterialInput');
+        const title = input.value.trim();
+        if (!title) return;
+        this.data.essayMaterials.push({ id: Date.now(), title, done: false });
+        input.value = '';
+        this.save();
+        this.renderEssay();
+      },
+      recordTodayStats() {
+        const today = new Date().toISOString().slice(0, 10);
+        const total = this.data.tasks.length;
+        const done = this.data.tasks.filter(t => t.done).length;
+        const idx = this.data.dailyStats.findIndex(s => s.date === today);
+        if (idx >= 0) this.data.dailyStats[idx] = { date: today, total, done };
+        else this.data.dailyStats.push({ date: today, total, done });
+        this.data.dailyStats = this.data.dailyStats.slice(-7);
+      },
+      renderData() {
+        this.recordTodayStats();
+        const stats = [];
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date(); d.setDate(d.getDate() - i);
+          const ds = d.toISOString().slice(0, 10);
+          const s = this.data.dailyStats.find(x => x.date === ds);
+          stats.push(s || { date: ds, total: 0, done: 0 });
+        }
+        const max = Math.max(...stats.map(s => s.total), 5);
+        document.getElementById('weeklyChart').innerHTML = stats.map(s => {
+          const totalH = Math.round(s.total / max * 100);
+          const doneH = Math.round(s.done / max * 100);
+          return `
+            <div class="flex-1 flex flex-col items-center justify-end gap-1">
+              <div class="relative w-full max-w-[28px] flex items-end justify-center gap-0.5" style="height:110px">
+                <div class="w-2 rounded-t bg-gray-200" style="height:${totalH || 4}px"></div>
+                <div class="w-2 rounded-t btn-primary" style="height:${doneH || 4}px"></div>
+              </div>
+              <div class="text-[10px] text-gray-400">${s.date.slice(5)}</div>
+            </div>
+          `;
+        }).join('');
+        const cats = ['行测','申论','时政','复盘'];
+        const counts = cats.map(c => ({ name: c, count: this.data.tasks.filter(t => t.category === c).length }));
+        const maxCat = Math.max(...counts.map(c => c.count), 1);
+        document.getElementById('tagDistribution').innerHTML = counts.map(c => {
+          const pct = Math.round(c.count / maxCat * 100);
+          return `
+            <div class="flex items-center gap-3 text-sm">
+              <div class="w-10 text-gray-600">${c.name}</div>
+              <div class="flex-1 progress-bar"><div class="progress-fill" style="width:${pct}%"></div></div>
+              <div class="w-5 text-right text-gray-500">${c.count}</div>
+            </div>
+          `;
+        }).join('');
+        document.getElementById('mockRecordList').innerHTML = this.data.mocks.map(m => {
+          const colorClass = m.score >= 75 ? 'bg-green-100 text-green-600' : m.score >= 70 ? 'bg-amber-100 text-amber-600' : 'bg-orange-100 text-orange-600';
+          return `
+            <div class="grid grid-cols-5 items-center px-2 py-3 rounded-xl border border-gray-100 text-sm">
+              <div class="text-gray-900 truncate pr-2">${m.title}</div>
+              <div class="text-gray-500 text-xs">${m.date}</div>
+              <div class="font-semibold">${m.score}</div>
+              <div class="text-gray-500">100</div>
+              <div><span class="text-xs px-2 py-1 rounded-md ${colorClass}">${m.score}%</span></div>
+            </div>
+          `;
+        }).join('');
+      },
+      renderToolbox() {
+        // static toolbox, no dynamic content
+      },
+      startTomato() {
+        if (confirm('开始 25 分钟番茄钟？时间到后会弹窗提醒。')) {
+          setTimeout(() => alert('番茄钟时间到！休息 5 分钟吧。'), 25 * 60 * 1000);
+          alert('番茄钟已开始，25 分钟后提醒。');
+        }
+      }
+    };
+    app.init();
+  </script>
+</body>
+</html>

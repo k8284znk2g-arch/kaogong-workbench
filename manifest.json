@@ -1,0 +1,22 @@
+{
+  "name": "考公工作台",
+  "short_name": "考公工作台",
+  "description": "备考总规划、每日任务、专项刷题、全真模考一站式工作台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#4f46e5",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
